@@ -3,12 +3,16 @@ import { connectDB } from "@/lib/mongodb";
 import { ServiceRecord } from "@/models/serviceRecord";
 
 export async function PATCH(
-    req: Request,
-    { params }: { params: { id: string } }
+    request: Request,
+    context: { params: Promise<{ id: string }> }
 ) {
     try {
         await connectDB();
-        const data = await req.json();
+
+        // ✅ await the params since Next.js 15 passes them as a Promise
+        const { id } = await context.params;
+        const data = await request.json();
+
         const { detectedIssues, partsReplaced, totalCost, isInWorkshop } = data;
 
         const update: any = {
@@ -18,16 +22,14 @@ export async function PATCH(
             isInWorkshop,
         };
 
-        // If car delivered, auto-assign handover date
+        // Automatically add delivery date if car is handed over
         if (isInWorkshop === false) {
             update.dateDelivered = new Date();
         }
 
-        const updatedRecord = await ServiceRecord.findByIdAndUpdate(
-            params.id,
-            update,
-            { new: true }
-        );
+        const updatedRecord = await ServiceRecord.findByIdAndUpdate(id, update, {
+            new: true,
+        });
 
         if (!updatedRecord) {
             return NextResponse.json(
@@ -38,7 +40,7 @@ export async function PATCH(
 
         return NextResponse.json(updatedRecord);
     } catch (error: any) {
-        console.error("Error updating service:", error);
+        console.error("❌ Error updating service record:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
